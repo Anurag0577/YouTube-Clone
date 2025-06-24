@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
+import ApiError from '../utilities/ApiError';
 
 const userSchema = new mongoose.Schema({
     watchHistory : [{
@@ -47,20 +48,18 @@ const userSchema = new mongoose.Schema({
 
 // You may think why i dont use arrow function here bcoz the arrow function did not support this keyword.
 userSchema.pre('save', async function(next){
-    // this condition is necessary bcoz let you skip this bcrypt process if password is not changed.
-    if(!this.isModified('password')){ // is modified is a mongoose method which checks if the password is modified or not.
-        // if password is not modified then just move to next middleware.
-        next();
+    // Skip password hashing if password hasn't been modified
+    if(!this.isModified('password')){
+        return next();
     }
+
     try {
-        // random text, just to increase security.
         const salt = await bcrypt.genSalt(10);
-        // hash the password
-        this.password = await bcrypt.hash(this.password, salt)
-        // now move to next middleware
-        next();
+        this.password = await bcrypt.hash(this.password, salt);
+        return next();
     } catch (error) {
-        next(error) // if any error occurs then pass it to next middleware
+        // Pass error to error handling middleware
+        return next(new ApiError(500, "Error occurred while hashing password"));
     }
 })
 
@@ -71,8 +70,7 @@ userSchema.pre('save', async function(next){
 // If you use arrow function then this will not refer to the user document.
 userSchema.methods.isPasswordCorrect = async function(password){
     return await bcrypt.compare(password, this.password) // it's return true or false
-}
-
+}   
 
 //the major difference between access token and refresh token is that access token is used to access the protected routes and refresh token is used to generate a new access token when the access token expires.
 // Access token is short lived and refresh token is long lived.
